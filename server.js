@@ -10,6 +10,7 @@ const ROOT = __dirname;
 const SCRAPER = path.join(ROOT, 'scrape-fb-metrics.js');
 const OVERRIDES_FILE = path.join(ROOT, 'overrides.json');
 const SESSION_FILE = path.join(ROOT, 'fb-session.json');
+const TMP_SESSION_FILE = '/tmp/fb-session.json';
 
 const VIDEOS = [
   { id: 1, title: "lycée agricole d'Yvetot", url: 'https://www.facebook.com/reel/1167958628558423' },
@@ -67,6 +68,19 @@ function loadOverrides() {
   }
 }
 
+function resolveSessionFile() {
+  if (fs.existsSync(SESSION_FILE)) return SESSION_FILE;
+  const sessionJson = process.env.FB_SESSION_JSON;
+  if (!sessionJson) return null;
+  try {
+    JSON.parse(sessionJson);
+    fs.writeFileSync(TMP_SESSION_FILE, sessionJson, 'utf8');
+    return TMP_SESSION_FILE;
+  } catch {
+    return null;
+  }
+}
+
 function scrapeMetrics() {
   return new Promise((resolve, reject) => {
     const args = [
@@ -76,8 +90,9 @@ function scrapeMetrics() {
       '--source=direct',
       ...VIDEOS.map((v) => `--url=${v.url}`),
     ];
-    if (fs.existsSync(SESSION_FILE)) {
-      args.push(`--storage-state=${SESSION_FILE}`);
+    const sessionFile = resolveSessionFile();
+    if (sessionFile) {
+      args.push(`--storage-state=${sessionFile}`);
     }
 
     execFile('node', args, { cwd: ROOT, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
