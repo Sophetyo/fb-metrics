@@ -81,6 +81,17 @@ function resolveSessionFile() {
   }
 }
 
+function chooseLikes(candidateLikes, baseLikes) {
+  if (!Number.isFinite(candidateLikes)) return baseLikes;
+  if (!Number.isFinite(baseLikes)) return candidateLikes;
+
+  // Reject obvious outliers from noisy Facebook UI counters.
+  const tooHigh = candidateLikes > baseLikes * 3 && candidateLikes - baseLikes > 500;
+  const tooLow = candidateLikes * 3 < baseLikes && baseLikes - candidateLikes > 300;
+  if (tooHigh || tooLow) return baseLikes;
+  return candidateLikes;
+}
+
 function scrapeMetrics() {
   return new Promise((resolve, reject) => {
     const args = [
@@ -107,13 +118,15 @@ function scrapeMetrics() {
         const merged = VIDEOS.map((v) => {
           const hit = byUrl.get(v.url) || {};
           const overrideLikes = overrides.get(v.url);
+          const baseLikes = FALLBACK_LIKES.get(v.url) ?? null;
+          const chosenLikes = chooseLikes(hit.likes, baseLikes);
           return {
             id: v.id,
             title: v.title,
             url: v.url,
             likes: Number.isFinite(overrideLikes)
               ? overrideLikes
-              : (Number.isFinite(hit.likes) ? hit.likes : (FALLBACK_LIKES.get(v.url) ?? null)),
+              : (Number.isFinite(chosenLikes) ? chosenLikes : baseLikes),
           };
         });
         const totals = {
