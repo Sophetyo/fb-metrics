@@ -99,6 +99,8 @@ function scrapeMetrics() {
       '--json=true',
       '--headless=true',
       '--source=direct',
+      '--wait-ms=1500',
+      '--concurrency=3',
       ...VIDEOS.map((v) => `--url=${v.url}`),
     ];
     const sessionFile = resolveSessionFile();

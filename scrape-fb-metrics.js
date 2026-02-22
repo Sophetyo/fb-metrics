@@ -10,6 +10,7 @@ function usage() {
   node scrape-fb-metrics.js --url "https://www.facebook.com/reel/..." [--source=direct|plugin]
   node scrape-fb-metrics.js --urls file.txt --json=true
   node scrape-fb-metrics.js --urls file.txt --storage-state=fb-session.json
+  node scrape-fb-metrics.js --urls file.txt --wait-ms=1500 --concurrency=3
 
 Input format (file.txt): one URL per line.
 You can provide either:
@@ -207,10 +208,11 @@ function pickSourceUrl(inputUrl, source) {
   return source === 'plugin' ? toPluginUrl(inputUrl) : toDirectUrl(inputUrl);
 }
 
-async function scrapeOne(page, inputUrl, debug, source) {
+async function scrapeOne(context, inputUrl, debug, source, waitMs) {
+  const page = await context.newPage();
   const url = pickSourceUrl(inputUrl, source);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(waitMs);
 
   const text = await page.evaluate(() => document.body?.innerText || '');
   const html = await page.content();
@@ -226,11 +228,13 @@ async function scrapeOne(page, inputUrl, debug, source) {
     fs.writeFileSync(path.resolve(process.cwd(), `debug-${safe}.html`), html, 'utf8');
   }
 
-  return {
+  const out = {
     inputUrl,
     scrapedUrl: url,
     ...metrics,
   };
+  await page.close();
+  return out;
 }
 
 async function main() {
@@ -252,6 +256,8 @@ async function main() {
   const source = String(args.source ?? 'direct').toLowerCase() === 'plugin' ? 'plugin' : 'direct';
   const asJson = String(args.json ?? 'false').toLowerCase() === 'true';
   const storageStateArg = args['storage-state'] ? path.resolve(process.cwd(), String(args['storage-state'])) : null;
+  const waitMs = Math.max(500, Number(args['wait-ms'] ?? 1500));
+  const concurrency = Math.max(1, Number(args.concurrency ?? 3));
 
   const headless = String(args.headless ?? 'false').toLowerCase() === 'true';
 
@@ -261,18 +267,21 @@ async function main() {
     contextOptions.storageState = storageStateArg;
   }
   const context = await browser.newContext(contextOptions);
-  const page = await context.newPage();
 
   const out = [];
-  for (const u of urls) {
-    try {
-      const row = await scrapeOne(page, u, debug, source);
-      out.push(row);
-      if (!asJson) console.log(`[OK] ${u}`);
-    } catch (e) {
-      out.push({ inputUrl: u, error: String(e.message || e) });
-      if (!asJson) console.log(`[ERR] ${u} -> ${String(e.message || e)}`);
-    }
+  for (let i = 0; i < urls.length; i += concurrency) {
+    const chunk = urls.slice(i, i + concurrency);
+    const chunkResults = await Promise.all(chunk.map(async (u) => {
+      try {
+        const row = await scrapeOne(context, u, debug, source, waitMs);
+        if (!asJson) console.log(`[OK] ${u}`);
+        return row;
+      } catch (e) {
+        if (!asJson) console.log(`[ERR] ${u} -> ${String(e.message || e)}`);
+        return { inputUrl: u, error: String(e.message || e) };
+      }
+    }));
+    out.push(...chunkResults);
   }
 
   await context.close();
