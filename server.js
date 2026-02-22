@@ -8,6 +8,7 @@ const { execFile } = require('child_process');
 const PORT = Number(process.env.PORT || 3210);
 const ROOT = __dirname;
 const SCRAPER = path.join(ROOT, 'scrape-fb-metrics.js');
+const OVERRIDES_FILE = path.join(ROOT, 'overrides.json');
 
 const VIDEOS = [
   { id: 1, title: "lycée agricole d'Yvetot", url: 'https://www.facebook.com/reel/1167958628558423' },
@@ -46,6 +47,25 @@ function sendFile(res, filePath, contentType) {
   });
 }
 
+function loadOverrides() {
+  if (!fs.existsSync(OVERRIDES_FILE)) return new Map();
+  try {
+    const raw = JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8'));
+    const list = Array.isArray(raw) ? raw : (Array.isArray(raw.overrides) ? raw.overrides : []);
+    const byUrl = new Map();
+    for (const row of list) {
+      if (!row || typeof row !== 'object') continue;
+      const url = String(row.url || '').trim();
+      const likes = Number(row.likes);
+      if (!url || !Number.isFinite(likes)) continue;
+      byUrl.set(url, likes);
+    }
+    return byUrl;
+  } catch {
+    return new Map();
+  }
+}
+
 function scrapeMetrics() {
   return new Promise((resolve, reject) => {
     const args = [
@@ -64,13 +84,17 @@ function scrapeMetrics() {
       try {
         const parsed = JSON.parse(stdout);
         const byUrl = new Map(parsed.results.map((r) => [r.inputUrl, r]));
+        const overrides = loadOverrides();
         const merged = VIDEOS.map((v) => {
           const hit = byUrl.get(v.url) || {};
+          const overrideLikes = overrides.get(v.url);
           return {
             id: v.id,
             title: v.title,
             url: v.url,
-            likes: Number.isFinite(hit.likes) ? hit.likes : (FALLBACK_LIKES.get(v.url) ?? null),
+            likes: Number.isFinite(overrideLikes)
+              ? overrideLikes
+              : (Number.isFinite(hit.likes) ? hit.likes : (FALLBACK_LIKES.get(v.url) ?? null)),
           };
         });
         const totals = {
