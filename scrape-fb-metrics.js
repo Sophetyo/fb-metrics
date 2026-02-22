@@ -9,6 +9,7 @@ function usage() {
   node scrape-fb-metrics.js --urls file.txt [--headless=true|false] [--source=direct|plugin]
   node scrape-fb-metrics.js --url "https://www.facebook.com/reel/..." [--source=direct|plugin]
   node scrape-fb-metrics.js --urls file.txt --json=true
+  node scrape-fb-metrics.js --urls file.txt --storage-state=fb-session.json
 
 Input format (file.txt): one URL per line.
 You can provide either:
@@ -239,11 +240,17 @@ async function main() {
   const debug = String(args.debug ?? 'false').toLowerCase() === 'true';
   const source = String(args.source ?? 'direct').toLowerCase() === 'plugin' ? 'plugin' : 'direct';
   const asJson = String(args.json ?? 'false').toLowerCase() === 'true';
+  const storageStateArg = args['storage-state'] ? path.resolve(process.cwd(), String(args['storage-state'])) : null;
 
   const headless = String(args.headless ?? 'false').toLowerCase() === 'true';
 
   const browser = await chromium.launch({ headless });
-  const page = await browser.newPage({ locale: 'fr-FR' });
+  const contextOptions = { locale: 'fr-FR' };
+  if (storageStateArg && fs.existsSync(storageStateArg)) {
+    contextOptions.storageState = storageStateArg;
+  }
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
 
   const out = [];
   for (const u of urls) {
@@ -257,6 +264,7 @@ async function main() {
     }
   }
 
+  await context.close();
   await browser.close();
 
   const totals = out.reduce((acc, r) => {

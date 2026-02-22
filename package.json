@@ -4,6 +4,8 @@
   "description": "",
   "main": "scrape-fb-metrics.js",
   "scripts": {
+    "session:save": "node save-fb-session.js fb-session.json",
+    "scrape:live": "node scrape-fb-metrics.js --urls=videos.txt --source=direct --headless=true --storage-state=fb-session.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -9,6 +9,7 @@ const PORT = Number(process.env.PORT || 3210);
 const ROOT = __dirname;
 const SCRAPER = path.join(ROOT, 'scrape-fb-metrics.js');
 const OVERRIDES_FILE = path.join(ROOT, 'overrides.json');
+const SESSION_FILE = path.join(ROOT, 'fb-session.json');
 
 const VIDEOS = [
   { id: 1, title: "lycée agricole d'Yvetot", url: 'https://www.facebook.com/reel/1167958628558423' },
@@ -75,6 +76,9 @@ function scrapeMetrics() {
       '--source=direct',
       ...VIDEOS.map((v) => `--url=${v.url}`),
     ];
+    if (fs.existsSync(SESSION_FILE)) {
+      args.push(`--storage-state=${SESSION_FILE}`);
+    }
 
     execFile('node', args, { cwd: ROOT, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
