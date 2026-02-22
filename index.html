@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Likes Facebook - 5 videos</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --line: #d8dee7;
+      --text: #1d2735;
+      --muted: #66758c;
+      --accent: #0a66c2;
+      --accent-hover: #084f96;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(180deg, #eef3fb 0%, var(--bg) 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      width: min(960px, 94vw);
+      margin: 24px auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .meta {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 96px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .likes {
+      min-width: 140px;
+      text-align: right;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .likes small {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .footer {
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .error {
+      color: #b42318;
+      font-weight: 600;
+    }
+
+    @media (max-width: 620px) {
+      .card { grid-template-columns: 1fr; }
+      .likes { text-align: left; }
+      .title { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>Likes des 5 videos</h1>
+        <div class="meta" id="last-update">Derniere mise a jour: -</div>
+      </div>
+      <button id="refresh">Refresh</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="footer" id="status">Pret.</div>
+  </div>
+
+  <script>
+    // Mets ici l'URL de ton backend live (server.js deploye sur un serveur public).
+    // Exemple: const LIVE_API_URL = 'https://api.www.schwarz.com.fr/EDEN/api/metrics';
+   const LIVE_API_URL = 'https://api.schwarz.com.fr/EDEN/api/metrics';
+
+    const grid = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+    const lastUpdateEl = document.getElementById('last-update');
+    const refreshBtn = document.getElementById('refresh');
+
+    function fmtLikes(n) {
+      return Number.isFinite(n) ? String(n) : 'N/A';
+    }
+
+    function render(videos, totalLikes) {
+      grid.innerHTML = videos.map((v) => `
+        <article class="card">
+          <div class="title" title="${v.title}">${v.id}. ${v.title}</div>
+          <div class="likes">
+            ${fmtLikes(v.likes)}
+            <small>likes</small>
+          </div>
+        </article>
+      `).join('');
+
+      statusEl.textContent = `Total likes: ${totalLikes}`;
+      lastUpdateEl.textContent = `Derniere mise a jour: ${new Date().toLocaleString('fr-FR')}`;
+      statusEl.classList.remove('error');
+    }
+
+    async function fetchApiMetrics() {
+      const endpoint = LIVE_API_URL || '/api/metrics';
+      const res = await fetch(endpoint, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur API');
+      return data;
+    }
+
+    async function fetchStaticMetrics() {
+      const res = await fetch(`./metrics.json?t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur metrics.json');
+      return data;
+    }
+
+    async function refresh() {
+      refreshBtn.disabled = true;
+      statusEl.textContent = 'Actualisation en cours...';
+      statusEl.classList.remove('error');
+      try {
+        let data;
+        try {
+          data = await fetchApiMetrics();
+        } catch (_) {
+          data = await fetchStaticMetrics();
+        }
+        const totalLikes = data.videos.reduce((s, v) => s + (Number.isFinite(v.likes) ? v.likes : 0), 0);
+        render(data.videos, totalLikes);
+      } catch (e) {
+        statusEl.textContent = `Erreur: ${e.message}`;
+        statusEl.classList.add('error');
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    }
+
+    refreshBtn.addEventListener('click', refresh);
+    refresh();
+  </script>
+</body>
+</html>

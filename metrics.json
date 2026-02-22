@@ -1,0 +1,38 @@
+{
+  "updatedAt": "2026-02-22T15:02:14.308Z",
+  "videos": [
+    {
+      "id": 1,
+      "title": "lycée agricole d'Yvetot",
+      "url": "https://www.facebook.com/reel/1167958628558423",
+      "likes": 227
+    },
+    {
+      "id": 2,
+      "title": "lycée La Salle St Antoine",
+      "url": "https://www.facebook.com/reel/1406510241168380",
+      "likes": 201
+    },
+    {
+      "id": 3,
+      "title": "Lycée Nature (85)",
+      "url": "https://www.facebook.com/reel/1201528905398420",
+      "likes": 453
+    },
+    {
+      "id": 4,
+      "title": "l'Agricampus de Laval",
+      "url": "https://www.facebook.com/reel/1704222193876563",
+      "likes": 152
+    },
+    {
+      "id": 5,
+      "title": "lycée de Melle (79)",
+      "url": "https://www.facebook.com/reel/865110959853994",
+      "likes": 272
+    }
+  ],
+  "totals": {
+    "likes": 1305
+  }
+}
