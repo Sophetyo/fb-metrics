@@ -143,7 +143,18 @@ function parseMetricsFromText(text) {
       }
     }
     if (nums.length > 0) {
-      const [a, b, c] = nums[0];
+      // Heuristic: prefer triplets where reactions are dominant and sizeable.
+      // This avoids tiny UI counters (e.g. "4") being selected as likes.
+      nums.sort((x, y) => {
+        const sx = x[0] + x[1] + x[2];
+        const sy = y[0] + y[1] + y[2];
+        if (y[0] !== x[0]) return y[0] - x[0];
+        return sy - sx;
+      });
+      const best =
+        nums.find(([a, b, c]) => a >= b && a >= c && a >= 10) ||
+        nums[0];
+      const [a, b, c] = best;
       likes = likes ?? a;
       comments = comments ?? b;
       shares = shares ?? c;
