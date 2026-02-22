@@ -85,6 +85,9 @@ function scrapeMetrics() {
 }
 
 const server = http.createServer(async (req, res) => {
+  const parsedUrl = new URL(req.url || '/', 'http://localhost');
+  const pathname = parsedUrl.pathname;
+
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -95,12 +98,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/' || req.url === '/index.html') {
+  if (pathname === '/' || pathname === '/index.html') {
     sendFile(res, path.join(ROOT, 'index.html'), 'text/html; charset=utf-8');
     return;
   }
 
-  if (req.url === '/api/metrics') {
+  if (pathname === '/api/metrics' || pathname === '/api/metrics/') {
     try {
       const data = await scrapeMetrics();
       sendJson(res, 200, data);
