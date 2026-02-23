@@ -208,18 +208,30 @@ function pickSourceUrl(inputUrl, source) {
   return source === 'plugin' ? toPluginUrl(inputUrl) : toDirectUrl(inputUrl);
 }
 
+function hasAnyMetric(m) {
+  return Number.isFinite(m.likes) || Number.isFinite(m.comments) || Number.isFinite(m.shares);
+}
+
 async function scrapeOne(context, inputUrl, debug, source, waitMs) {
   const page = await context.newPage();
   const url = pickSourceUrl(inputUrl, source);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForTimeout(waitMs);
+  let text = '';
+  let html = '';
+  let metrics = { likes: null, comments: null, shares: null };
 
-  const text = await page.evaluate(() => document.body?.innerText || '');
-  const html = await page.content();
-  const byText = parseMetricsFromText(text);
-  // HTML extraction is only used in plugin mode because direct pages are too noisy in script blobs.
-  const byHtml = source === 'plugin' ? parseMetricsFromHtml(html) : { likes: null, comments: null, shares: null };
-  const metrics = mergeMetrics(byText, byHtml);
+  // Retry once with a longer wait. Facebook reels can hydrate counters late.
+  const waits = [waitMs, waitMs + 1800];
+  for (const w of waits) {
+    await page.waitForTimeout(w);
+    text = await page.evaluate(() => document.body?.innerText || '');
+    html = await page.content();
+    const byText = parseMetricsFromText(text);
+    // HTML extraction is only used in plugin mode because direct pages are too noisy in script blobs.
+    const byHtml = source === 'plugin' ? parseMetricsFromHtml(html) : { likes: null, comments: null, shares: null };
+    metrics = mergeMetrics(byText, byHtml);
+    if (hasAnyMetric(metrics)) break;
+  }
 
   if (debug) {
     const id = (inputUrl.match(/\/(reel|videos?)\/(\d+)/i)?.[2] || Date.now().toString());
