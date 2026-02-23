@@ -8,7 +8,6 @@ const { execFile } = require('child_process');
 const PORT = Number(process.env.PORT || 3210);
 const ROOT = __dirname;
 const SCRAPER = path.join(ROOT, 'scrape-fb-metrics.js');
-const OVERRIDES_FILE = path.join(ROOT, 'overrides.json');
 const SESSION_FILE = path.join(ROOT, 'fb-session.json');
 const TMP_SESSION_FILE = '/tmp/fb-session.json';
 
@@ -19,13 +18,6 @@ const VIDEOS = [
   { id: 4, title: "l'Agricampus de Laval", url: 'https://www.facebook.com/reel/1704222193876563' },
   { id: 5, title: 'lycée de Melle (79)', url: 'https://www.facebook.com/reel/865110959853994' },
 ];
-const FALLBACK_LIKES = new Map([
-  ['https://www.facebook.com/reel/1167958628558423', 227],
-  ['https://www.facebook.com/reel/1406510241168380', 201],
-  ['https://www.facebook.com/reel/1201528905398420', 453],
-  ['https://www.facebook.com/reel/1704222193876563', 152],
-  ['https://www.facebook.com/reel/865110959853994', 272],
-]);
 
 function sendJson(res, status, payload) {
   res.writeHead(status, {
@@ -49,25 +41,6 @@ function sendFile(res, filePath, contentType) {
   });
 }
 
-function loadOverrides() {
-  if (!fs.existsSync(OVERRIDES_FILE)) return new Map();
-  try {
-    const raw = JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8'));
-    const list = Array.isArray(raw) ? raw : (Array.isArray(raw.overrides) ? raw.overrides : []);
-    const byUrl = new Map();
-    for (const row of list) {
-      if (!row || typeof row !== 'object') continue;
-      const url = String(row.url || '').trim();
-      const likes = Number(row.likes);
-      if (!url || !Number.isFinite(likes)) continue;
-      byUrl.set(url, likes);
-    }
-    return byUrl;
-  } catch {
-    return new Map();
-  }
-}
-
 function resolveSessionFile() {
   if (fs.existsSync(SESSION_FILE)) return SESSION_FILE;
   const sessionJson = process.env.FB_SESSION_JSON;
@@ -79,17 +52,6 @@ function resolveSessionFile() {
   } catch {
     return null;
   }
-}
-
-function chooseLikes(candidateLikes, baseLikes) {
-  if (!Number.isFinite(candidateLikes)) return baseLikes;
-  if (!Number.isFinite(baseLikes)) return candidateLikes;
-
-  // Reject obvious outliers from noisy Facebook UI counters.
-  const tooHigh = candidateLikes > baseLikes * 3 && candidateLikes - baseLikes > 500;
-  const tooLow = candidateLikes * 3 < baseLikes && baseLikes - candidateLikes > 300;
-  if (tooHigh || tooLow) return baseLikes;
-  return candidateLikes;
 }
 
 function scrapeMetrics() {
@@ -116,19 +78,13 @@ function scrapeMetrics() {
       try {
         const parsed = JSON.parse(stdout);
         const byUrl = new Map(parsed.results.map((r) => [r.inputUrl, r]));
-        const overrides = loadOverrides();
         const merged = VIDEOS.map((v) => {
           const hit = byUrl.get(v.url) || {};
-          const overrideLikes = overrides.get(v.url);
-          const baseLikes = FALLBACK_LIKES.get(v.url) ?? null;
-          const chosenLikes = chooseLikes(hit.likes, baseLikes);
           return {
             id: v.id,
             title: v.title,
             url: v.url,
-            likes: Number.isFinite(overrideLikes)
-              ? overrideLikes
-              : (Number.isFinite(chosenLikes) ? chosenLikes : baseLikes),
+            likes: Number.isFinite(hit.likes) ? hit.likes : null,
           };
         });
         const totals = {
